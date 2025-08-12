@@ -1,9 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './Panel.css';
 
-function Panel() {
+// Global counter for z-index management
+let globalZIndex = 1;
+
+function Panel({ title = "My App", initialPosition = { x: 0, y: 0 }, id }) {
   const [panelSize, setPanelSize] = useState({ width: 400, height: 300 });
-  const [panelPosition, setPanelPosition] = useState({ x: 0, y: 0 });
+  const [panelPosition, setPanelPosition] = useState(initialPosition);
   const [isResizing, setIsResizing] = useState(false);
   const [isMoving, setIsMoving] = useState(false);
   const [resizeDirection, setResizeDirection] = useState(null);
@@ -15,17 +18,39 @@ function Panel() {
 
   const handleMouseDown = (e, direction) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsResizing(true);
     setResizeDirection(direction);
     setStartPos({ x: e.clientX, y: e.clientY });
     setStartSize({ width: panelSize.width, height: panelSize.height });
     setStartPanelPos({ x: panelPosition.x, y: panelPosition.y });
+    
+    // Bring panel to front using global counter
+    if (panelRef.current) {
+      globalZIndex++;
+      panelRef.current.style.zIndex = globalZIndex;
+    }
   };
 
   const handleHeaderMouseDown = (e) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsMoving(true);
     setStartMovePos({ x: e.clientX, y: e.clientY });
+    
+    // Bring panel to front using global counter
+    if (panelRef.current) {
+      globalZIndex++;
+      panelRef.current.style.zIndex = globalZIndex;
+    }
+  };
+
+  const handlePanelClick = (e) => {
+    // Bring panel to front when clicked anywhere
+    if (panelRef.current) {
+      globalZIndex++;
+      panelRef.current.style.zIndex = globalZIndex;
+    }
   };
 
   const handleMouseMove = (e) => {
@@ -116,11 +141,14 @@ function Panel() {
     <div 
       className="panel" 
       ref={panelRef}
+      data-panel-id={id}
+      onClick={handlePanelClick}
       style={{ 
         width: `${panelSize.width}px`, 
         height: `${panelSize.height}px`,
         maxWidth: 'none',
-        transform: `translate(${panelPosition.x}px, ${panelPosition.y}px)`
+        transform: `translate(${panelPosition.x}px, ${panelPosition.y}px)`,
+        position: 'absolute'
       }}
     >
       {/* Corner resize handles */}
@@ -163,7 +191,7 @@ function Panel() {
         className="header-bar"
         onMouseDown={handleHeaderMouseDown}
       >
-        <div className="header-title">My App</div>
+        <div className="header-title">{title}</div>
         <div className="header-actions">
           <button className="header-button">−</button>
           <button className="header-button">□</button>

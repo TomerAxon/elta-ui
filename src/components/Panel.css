@@ -7,6 +7,17 @@
   animation: fadeInUp 0.6s ease-out;
   overflow: hidden;
   position: relative;
+  z-index: 1;
+  transition: z-index 0.1s ease;
+}
+
+.panel:hover,
+.panel:focus-within {
+  z-index: 10;
+}
+
+.panel.active {
+  z-index: 1000 !important;
 }
 
 /* Corner resize handles */
