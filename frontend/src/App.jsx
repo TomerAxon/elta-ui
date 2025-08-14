@@ -74,6 +74,16 @@ function FullScreenToggle({ tileId, onRestore, onRemember }) {
     )
 }
 
+function InfoPanelToggle({ tileId, isVisible, onToggle }) {
+    return (
+        <button
+            title={isVisible ? 'Hide info panel' : 'Show info panel'}
+            className={`bp3-button bp3-minimal ${isVisible ? 'bp3-icon-eye-off' : 'bp3-icon-eye-open'}`}
+            onClick={() => onToggle(tileId)}
+        />
+    )
+}
+
 export default function App() {
     const initialTree = useMemo(() => createBalancedTreeFromLeaves(initialLeaves), [])
     const [tree, setTree] = useState(initialTree)
@@ -101,6 +111,8 @@ export default function App() {
     const previousTreesByIdRef = useRef(new Map())
     const [selectedTileId, setSelectedTileId] = useState(null)
     const [tileTextById, setTileTextById] = useState({})
+    const [infoPanelVisibleById, setInfoPanelVisibleById] = useState({})
+    const [infoPanelWidthById, setInfoPanelWidthById] = useState({})
 	const tileBodyRefs = useRef(new Map())
 	const setTileBodyRef = (id) => (el) => {
 		if (el) {
@@ -109,6 +121,34 @@ export default function App() {
 			tileBodyRefs.current.delete(id)
 		}
 	}
+    
+    // Helper functions for info panel management
+    const toggleInfoPanel = (tileId) => {
+        console.log('Toggling info panel for tile:', tileId, 'Current state:', infoPanelVisibleById[tileId])
+        setInfoPanelVisibleById(prev => {
+            const newState = {
+                ...prev,
+                [tileId]: prev[tileId] === undefined ? false : !prev[tileId]
+            }
+            console.log('New state for tile', tileId, ':', newState[tileId])
+            return newState
+        })
+    }
+    
+    const getInfoPanelVisible = (tileId) => {
+        return infoPanelVisibleById[tileId] === undefined ? true : infoPanelVisibleById[tileId]
+    }
+    
+    const getInfoPanelWidth = (tileId) => {
+        return infoPanelWidthById[tileId] || 200 // Default width
+    }
+    
+    const setInfoPanelWidth = (tileId, width) => {
+        setInfoPanelWidthById(prev => ({
+            ...prev,
+            [tileId]: Math.max(100, Math.min(400, width)) // Clamp between 100-400px
+        }))
+    }
     
     const splitSelectedTile = () => {
         if (!selectedTileId || !tree) return
@@ -274,6 +314,116 @@ export default function App() {
         }
     }, [isPaletteOpen])
 
+    // Add click listeners to mosaic window title bars
+    useEffect(() => {
+        const handleTitleClick = (e) => {
+            const mosaicWindow = e.target.closest('.mosaic-window');
+            console.log('Global mousedown event:', {
+                target: e.target,
+                targetClass: e.target.className,
+                targetTag: e.target.tagName,
+                toolbar: e.target.closest('.mosaic-window-toolbar'),
+                title: e.target.closest('.mosaic-window-title'),
+                mosaicWindow: mosaicWindow,
+                dataTileId: mosaicWindow ? mosaicWindow.getAttribute('data-tile-id') : null,
+                windowId: mosaicWindow ? mosaicWindow.id : null
+            });
+            
+         
+            
+            const titleBar = e.target.closest('.mosaic-window-toolbar, .mosaic-window-title');
+            if (titleBar) {
+                const mosaicWindow = titleBar.closest('.mosaic-window');
+                if (mosaicWindow) {
+                    // Debug: log all attributes on the mosaic window
+                    console.log('Mosaic window attributes:', {
+                        element: mosaicWindow,
+                        attributes: Array.from(mosaicWindow.attributes).map(attr => `${attr.name}="${attr.value}"`),
+                        className: mosaicWindow.className,
+                        id: mosaicWindow.id,
+                        tagName: mosaicWindow.tagName
+                    });
+                    
+                    // Also check parent elements
+                    let parent = mosaicWindow.parentElement;
+                    let level = 0;
+                    while (parent && level < 5) {
+                        console.log(`Parent level ${level}:`, {
+                            tagName: parent.tagName,
+                            id: parent.id,
+                            className: parent.className
+                        });
+                        parent = parent.parentElement;
+                        level++;
+                    }
+                    
+                    // Try to find the tile ID by looking at the mosaic structure
+                    // Find all mosaic windows and determine which one this is
+                    const allMosaicWindows = document.querySelectorAll('.mosaic-window');
+                    const windowIndex = Array.from(allMosaicWindows).indexOf(mosaicWindow);
+                    console.log('Window index in all mosaic windows:', windowIndex);
+                    
+                    // Get the tile IDs from our state
+                    const tileIds = Object.keys(tileHeatmapById);
+                    console.log('Available tile IDs:', tileIds);
+                    
+                    // Log the mosaic tree structure to understand the relationship
+                    console.log('Current mosaic tree:', tree);
+                    
+                    // Try to find the tile ID by traversing the tree structure
+                    let foundTileId = null;
+                    
+                    // Function to traverse the tree and find the tile ID
+                    const findTileIdInTree = (node, path = []) => {
+                        if (typeof node === 'string') {
+                            // This is a leaf node (tile ID)
+                            console.log('Found tile in tree at path:', path, 'tileId:', node);
+                            return node;
+                        } else if (node && typeof node === 'object') {
+                            // This is a split node, traverse children
+                            for (const [direction, child] of Object.entries(node)) {
+                                const result = findTileIdInTree(child, [...path, direction]);
+                                if (result) return result;
+                            }
+                        }
+                        return null;
+                    };
+                    
+                    // Get all tile IDs from the tree
+                    const treeTileIds = [];
+                    const collectTileIds = (node) => {
+                        if (typeof node === 'string') {
+                            treeTileIds.push(node);
+                        } else if (node && typeof node === 'object') {
+                            for (const child of Object.values(node)) {
+                                collectTileIds(child);
+                            }
+                        }
+                    };
+                    collectTileIds(tree);
+                    console.log('Tile IDs from tree:', treeTileIds);
+                    
+                    if (windowIndex >= 0 && windowIndex < treeTileIds.length) {
+                        const tileId = treeTileIds[windowIndex];
+                        console.log('Title bar clicked via tree index matching, setting tile:', tileId);
+                        setSelectedTileId(tileId);
+                    } else {
+                        console.log('Could not match window index to tree tile ID. windowIndex:', windowIndex, 'treeTileIds:', treeTileIds);
+                    }
+                } else {
+                    console.log('No mosaic window found');
+                }
+            } else {
+                console.log('Click not on title/toolbar, ignoring');
+            }
+        };
+
+        document.addEventListener('mousedown', handleTitleClick);
+        return () => {
+            document.removeEventListener('mousedown', handleTitleClick);
+        };
+    }, [tileHeatmapById, tree]);
+
 	return (
 		<div className="bp3-dark" style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column' }}>
 			{/* Top panel */}
@@ -302,6 +452,7 @@ export default function App() {
                             className="bp3-button bp3-outlined"
                             onClick={() => setIsPaletteOpen((v) => !v)}
                             title="Plotly color scale"
+                            style={{ backgroundColor: '#30404d', border: '1px solid #394b59' }}
                         >
                             <span
                                 aria-hidden
@@ -320,7 +471,7 @@ export default function App() {
                             <span className="bp3-icon bp3-icon-caret-down" style={{ marginLeft: 8 }} />
                         </button>
                         {isPaletteOpen && (
-                            <div className="bp3-menu" style={{ position: 'absolute', zIndex: 20, top: '100%', left: 0, minWidth: 200, maxHeight: 280, overflowY: 'auto' }}>
+                            <div className="bp3-menu" style={{ position: 'absolute', zIndex: 20, top: '100%', left: 0, minWidth: 200, maxHeight: 280, overflowY: 'auto', backgroundColor: '#30404d', border: '1px solid #394b59' }}>
                                 {Object.keys(PALETTE_NAME_TO_COLORS).map((name) => (
                                     <div
                                         key={name}
@@ -406,55 +557,227 @@ export default function App() {
                 <div ref={mosaicContainerRef} style={{ flex: 1, height: '100%' }} className="mosaic-blueprint-theme bp4-dark">
                 <Mosaic
 						value={tree}
-						onChange={setTree}
-						onRelease={setTree}
-                    renderTile={(id, path) => (
+						onChange={(newTree) => {
+                            console.log('Mosaic onChange:', { newTree });
+                            setTree(newTree);
+                        }}
+                        onRelease={(newTree) => {
+                            console.log('Mosaic onRelease:', { newTree });
+                            setTree(newTree);
+                        }}
+                    renderTile={(id, path) => {
+                        const tileData = tileHeatmapById[id];
+                        const tileTitle = tileData ? 
+                            `${tileData.filename} [${tileData.index0}]` : 
+                            `Tile ${id}`;
+                        
+                        return (
 						<MosaicWindow
 							draggable={true}
-                        title={`Tile ${id}`}
+                        title={tileTitle}
 							path={path}
 							createNode={createNode}
 							toolbarControls={[
 								<FullScreenToggle key={`fs-${id}`} tileId={id} onRemember={rememberTreeFor} onRestore={restoreTreeFor} />,
+								<InfoPanelToggle key={`info-${id}`} tileId={id} isVisible={getInfoPanelVisible(id)} onToggle={toggleInfoPanel} />,
 								<SplitButton key="split" />,
 								<RemoveButton key="remove" />,
 							]}
                         className={selectedTileId === id ? 'is-selected' : ''}
+                        id={`mosaic-window-${id}`}
+                        data-tile-id={id}
+                        onMouseDown={(e) => {
+                            console.log('MosaicWindow mouseDown:', {
+                                id,
+                                target: e.target,
+                                targetClass: e.target.className,
+                                targetTag: e.target.tagName,
+                                toolbar: e.target.closest('.mosaic-window-toolbar'),
+                                title: e.target.closest('.mosaic-window-title'),
+                                currentSelected: selectedTileId
+                            });
+                            
+                            // Only select if clicking on the title bar or toolbar, not on content
+                            if (e.target.closest('.mosaic-window-toolbar') || e.target.closest('.mosaic-window-title')) {
+                                console.log('Setting selected tile to:', id);
+                                setSelectedTileId(id);
+                            } else {
+                                console.log('Click not on title/toolbar, ignoring');
+                            }
+                        }}
+                        onDragStart={(e) => {
+                            console.log('Tile drag started:', {
+                                id,
+                                target: e?.target || 'undefined',
+                                event: e,
+                                currentSelected: selectedTileId
+                            });
+                        }}
+                        onTitleClick={(e) => {
+                            console.log('MosaicWindow onTitleClick:', {
+                                id,
+                                target: e?.target,
+                                event: e,
+                                currentSelected: selectedTileId
+                            });
+                            setSelectedTileId(id);
+                        }}
+                        onTitleDoubleClick={(e) => {
+                            console.log('MosaicWindow onTitleDoubleClick:', {
+                                id,
+                                target: e?.target,
+                                event: e,
+                                currentSelected: selectedTileId
+                            });
+                        }}
+                        onFocus={(e) => {
+                            console.log('MosaicWindow onFocus:', {
+                                id,
+                                target: e?.target,
+                                event: e,
+                                currentSelected: selectedTileId
+                            });
+                        }}
+                        onBlur={(e) => {
+                            console.log('MosaicWindow onBlur:', {
+                                id,
+                                target: e?.target,
+                                event: e,
+                                currentSelected: selectedTileId
+                            });
+                        }}
+                        onMouseEnter={(e) => {
+                            console.log('MosaicWindow onMouseEnter:', {
+                                id,
+                                target: e?.target,
+                                event: e,
+                                currentSelected: selectedTileId
+                            });
+                        }}
+                        onMouseLeave={(e) => {
+                            console.log('MosaicWindow onMouseLeave:', {
+                                id,
+                                target: e?.target,
+                                event: e,
+                                currentSelected: selectedTileId
+                            });
+                        }}
 						>
                                 <div
                                     ref={setTileBodyRef(id)}
-                                    style={{ padding: 0, height: '100%', color: '#0a0a0F', whiteSpace: 'pre-wrap' }}
-                                    onClick={() => setSelectedTileId(id)}
+                                    style={{ 
+                                        padding: 0, 
+                                        height: '100%', 
+                                        color: '#0a0a0F', 
+                                        whiteSpace: 'pre-wrap',
+                                        display: 'flex',
+                                        flexDirection: 'row'
+                                    }}
+                                    onClick={(e) => {
+                                        console.log('Content div clicked:', {
+                                            id,
+                                            target: e.target,
+                                            targetClass: e.target.className,
+                                            targetTag: e.target.tagName,
+                                            currentSelected: selectedTileId
+                                        });
+                                        setSelectedTileId(id);
+                                    }}
                                 >
-                                    {tileHeatmapById[id] ? (
-                                        <Plot
-                                            data={[{
-                                                type: 'heatmap',
-                                                z: tileHeatmapById[id].z,
-                                                colorscale: colorScale,
-                                                showscale: showColorScale,
-                                                zmin: Number.isFinite(tileHeatmapById[id].min) ? tileHeatmapById[id].min : undefined,
-                                                zmax: Number.isFinite(tileHeatmapById[id].max) ? tileHeatmapById[id].max : undefined,
-                                            }]}
-                                            layout={{
-                                                margin: { l: 40, r: 10, t: 30, b: 40 },
-                                                paper_bgcolor: 'rgba(0,0,0,0)',
-                                                plot_bgcolor: 'rgba(0,0,0,0)',
-                                                autosize: true,
-                                                title: tileHeatmapById[id].filename + (Array.isArray(tileHeatmapById[id].z) ? ` [${tileHeatmapById[id].index0}]` : ''),
-                                            }}
-                                            useResizeHandler
-                                            style={{ width: '100%', height: '100%' }}
-                                            config={{ displayModeBar: false }}
-                                        />
-                                    ) : (
-                                        <div style={{ padding: 12 }}>
-                                            {(tileTextById[id] && tileTextById[id].trim().length > 0) ? tileTextById[id] : `Content for tile ${id}`}
+                                    {/* Plotly chart container - flexible width */}
+                                    <div style={{ 
+                                        flex: getInfoPanelVisible(id) ? '1' : '1', 
+                                        height: '100%', 
+                                        display: 'flex', 
+                                        flexDirection: 'column'
+                                    }}>
+                                        {tileHeatmapById[id] ? (
+                                            <Plot
+                                                data={[{
+                                                    type: 'heatmap',
+                                                    z: tileHeatmapById[id].z,
+                                                    colorscale: colorScale,
+                                                    showscale: showColorScale,
+                                                    zmin: Number.isFinite(tileHeatmapById[id].min) ? tileHeatmapById[id].min : undefined,
+                                                    zmax: Number.isFinite(tileHeatmapById[id].max) ? tileHeatmapById[id].max : undefined,
+                                                }]}
+                                                layout={{
+                                                    margin: { l: 40, r: 10, t: 30, b: 40 },
+                                                    paper_bgcolor: 'rgba(0,0,0,0)',
+                                                    plot_bgcolor: 'rgba(0,0,0,0)',
+                                                    autosize: true,
+                                                    title: tileHeatmapById[id].filename + (Array.isArray(tileHeatmapById[id].z) ? ` [${tileHeatmapById[id].index0}]` : ''),
+                                                }}
+                                                useResizeHandler
+                                                style={{ width: '100%', height: '100%' }}
+                                                config={{ displayModeBar: false }}
+                                            />
+                                        ) : (
+                                            <div style={{ padding: 12 }}>
+                                                {(tileTextById[id] && tileTextById[id].trim().length > 0) ? tileTextById[id] : `Content for tile ${id}`}
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {/* Resizable info panel */}
+                                    {getInfoPanelVisible(id) && (
+                                        <Resizable
+                                            width={getInfoPanelWidth(id)}
+                                            height={0}
+                                            axis="x"
+                                            onResize={(e, data) => setInfoPanelWidth(id, data.size.width)}
+                                            minConstraints={[100, 0]}
+                                            maxConstraints={[400, 0]}
+                                            handle={<span className="info-panel-resize-handle" />}
+                                        >
+                                            <div style={{ 
+                                                width: getInfoPanelWidth(id),
+                                                height: '100%', 
+                                                backgroundColor: '#394b59',
+                                                border: '1px solid #5c7080',
+                                                borderRadius: 4,
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                padding: 8,
+                                                boxSizing: 'border-box',
+                                                marginLeft: 4
+                                            }}>
+                                        <div style={{ 
+                                            fontSize: '14px', 
+                                            fontWeight: 'bold', 
+                                            color: '#f5f8fa',
+                                            marginBottom: 8,
+                                            borderBottom: '1px solid #5c7080',
+                                            paddingBottom: 4
+                                        }}>
+                                            Info Panel
                                         </div>
+                                        <div style={{ 
+                                            flex: 1, 
+                                            color: '#bfccd6',
+                                            fontSize: '12px',
+                                            lineHeight: '1.4'
+                                        }}>
+                                            {tileHeatmapById[id] ? (
+                                                <div>
+                                                    <div><strong>File:</strong> {tileHeatmapById[id].filename}</div>
+                                                    <div><strong>Index:</strong> {tileHeatmapById[id].index0}</div>
+                                                    <div><strong>Shape:</strong> {tileHeatmapById[id].z.length} × {tileHeatmapById[id].z[0]?.length || 0}</div>
+                                                    <div><strong>Min:</strong> {tileHeatmapById[id].min?.toFixed(4) || 'N/A'}</div>
+                                                    <div><strong>Max:</strong> {tileHeatmapById[id].max?.toFixed(4) || 'N/A'}</div>
+                                                    <div><strong>Color Scale:</strong> {colorScale}</div>
+                                                </div>
+                                            ) : (
+                                                <div>No data loaded</div>
+                                            )}
+                                        </div>
+                                            </div>
+                                        </Resizable>
                                     )}
                                 </div>
 							</MosaicWindow>
-						)}
+						);
+                    }}
 					/>
 				</div>
 			</div>

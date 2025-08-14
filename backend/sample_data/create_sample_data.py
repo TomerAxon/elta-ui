@@ -1,9 +1,6 @@
 import numpy as np
 import random
 import os
-import pandas as pd
-
-df = pd.read_csv(r"C:\Users\axon-admin\code\range-doppler-visualiser-demo-for-codex\hello-electron-fastapi\backend\sample_data\data.csv")
 
 def create_random_2d_array_with_bands():
     """Create a random size 2D array with random band patterns"""
@@ -12,7 +9,7 @@ def create_random_2d_array_with_bands():
     cols = random.randint(600, 1440)
     
     # Create base random data
-    data = np.random.rand(4,rows, cols)
+    data = np.random.rand(8,rows, cols)
     
     # Add random number of bands (between 2 and 8)
     num_bands = random.randint(2, 8)
@@ -65,7 +62,7 @@ def create_multiple_arrays(n=5):
         data = create_random_2d_array_with_bands()
         
         # Save individual array
-        filename = f'array_{i+1}.npy'
+        filename = f'array_8_bands_{i+1}.npy'
         np.save(os.path.join(script_directory, filename), data)
         
         arrays.append({
